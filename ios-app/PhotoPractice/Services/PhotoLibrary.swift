@@ -129,8 +129,8 @@ final class PhotoLibrary {
     }
 
     private func photoItem(for imageURL: URL, rootURL: URL) -> PhotoItem {
-        let relativePath = imageURL.path
-            .replacingOccurrences(of: rootURL.path + "/", with: "")
+        let relativePath = imageURL.path(percentEncoded: false)
+            .replacingOccurrences(of: rootURL.path(percentEncoded: false) + "/", with: "")
             .replacingOccurrences(of: "\\", with: "/")
         let components = relativePath.split(separator: "/").map(String.init)
         let filename = imageURL.lastPathComponent
@@ -170,14 +170,31 @@ final class PhotoLibrary {
     }
 
     private func imageURL(for photo: PhotoItem) -> URL? {
-        if let importedURL = try? importedRootURL().appendingPathComponent(photo.path),
+        if let importedURL = try? url(forRelativePath: photo.path, under: importedRootURL()),
            fileManager.fileExists(atPath: importedURL.path) {
             return importedURL
         }
 
-        return Bundle.main.resourceURL?
+        guard let bundledRootURL = Bundle.main.resourceURL?
             .appendingPathComponent(resourceRoot, isDirectory: true)
-            .appendingPathComponent(photo.path, isDirectory: false)
+        else {
+            return nil
+        }
+        return try? url(forRelativePath: photo.path, under: bundledRootURL)
+    }
+
+    private func url(forRelativePath relativePath: String, under rootURL: URL) throws -> URL {
+        let components = relativePath
+            .replacingOccurrences(of: "\\", with: "/")
+            .split(separator: "/")
+            .map(String.init)
+        guard !components.isEmpty, !components.contains("..") else {
+            throw PhotoLibraryError.missingImage(relativePath)
+        }
+
+        return components.reduce(rootURL) { url, component in
+            url.appendingPathComponent(component, isDirectory: false)
+        }
     }
 
     private var bundledManifestURL: URL? {
@@ -202,3 +219,4 @@ final class PhotoLibrary {
         ["jpg", "jpeg", "png", "heic", "heif", "webp"].contains(url.pathExtension.lowercased())
     }
 }
+
