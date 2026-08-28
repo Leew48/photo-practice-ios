@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ViewerView: View {
     @EnvironmentObject private var store: PhotoPracticeStore
+    @FocusState private var isNoteFocused: Bool
 
     private let observationTags = ["构图", "光线", "色彩", "主体", "瞬间", "层次"]
 
@@ -22,6 +23,7 @@ struct ViewerView: View {
                             .padding(.horizontal)
                             .padding(.bottom, 96)
                         }
+                        .scrollDismissesKeyboard(.interactively)
                     }
                 } else {
                     ScrollView {
@@ -33,6 +35,14 @@ struct ViewerView: View {
             .background(Color.practicePaper.ignoresSafeArea())
             .navigationTitle("看图")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("完成") {
+                        isNoteFocused = false
+                    }
+                }
+            }
         }
     }
 
@@ -43,7 +53,7 @@ struct ViewerView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(Color.practiceClay)
+                .background(Color.practicePeach)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             Text(photo.title ?? photo.filename)
@@ -71,20 +81,39 @@ struct ViewerView: View {
 
     private var observationPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("一句观察")
-                .font(.headline)
-                .foregroundStyle(Color.practiceInk)
+            HStack {
+                Text("一句观察")
+                    .font(.headline)
+                    .foregroundStyle(Color.practiceInk)
+
+                Spacer()
+
+                if isNoteFocused {
+                    Button("完成") {
+                        isNoteFocused = false
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.practiceAqua)
+                }
+            }
 
             TextEditor(text: $store.noteText)
+                .focused($isNoteFocused)
                 .frame(minHeight: 84)
                 .padding(8)
+                .scrollContentBackground(.hidden)
                 .foregroundStyle(Color.practiceInk)
-                .background(Color.black.opacity(0.04))
+                .background(Color.white.opacity(0.62))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(Color.practiceAqua.opacity(isNoteFocused ? 0.44 : 0.16), lineWidth: 1)
+                )
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 8) {
                 ForEach(observationTags, id: \.self) { tag in
                     Button {
+                        isNoteFocused = false
                         if store.selectedTags.contains(tag) {
                             store.selectedTags.remove(tag)
                         } else {
@@ -100,6 +129,7 @@ struct ViewerView: View {
 
             HStack(spacing: 8) {
                 Button {
+                    isNoteFocused = false
                     store.showPrevious()
                 } label: {
                     Label("上一张", systemImage: "chevron.left")
@@ -107,6 +137,7 @@ struct ViewerView: View {
                 .buttonStyle(SecondaryPracticeButtonStyle())
 
                 Button {
+                    isNoteFocused = false
                     store.showNext()
                 } label: {
                     Label("稍后", systemImage: "forward")
@@ -116,6 +147,7 @@ struct ViewerView: View {
 
             HStack(spacing: 8) {
                 Button {
+                    isNoteFocused = false
                     store.markCurrent(favorite: false)
                 } label: {
                     Label("已看", systemImage: "checkmark")
@@ -124,6 +156,7 @@ struct ViewerView: View {
                 .buttonStyle(PrimaryPracticeButtonStyle())
 
                 Button {
+                    isNoteFocused = false
                     store.markCurrent(favorite: true)
                 } label: {
                     Label("收藏", systemImage: "star")
