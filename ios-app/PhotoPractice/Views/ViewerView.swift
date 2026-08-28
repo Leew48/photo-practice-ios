@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ViewerView: View {
     @EnvironmentObject private var store: PhotoPracticeStore
@@ -97,18 +98,33 @@ struct ViewerView: View {
                 }
             }
 
-            TextEditor(text: $store.noteText)
-                .focused($isNoteFocused)
-                .frame(minHeight: 84)
-                .padding(8)
-                .scrollContentBackground(.hidden)
-                .foregroundStyle(Color.practiceInk)
-                .background(Color.white.opacity(0.62))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Color.practiceAqua.opacity(isNoteFocused ? 0.44 : 0.16), lineWidth: 1)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.practiceLilac.opacity(0.18))
+
+                if store.noteText.isEmpty {
+                    Text("写下这一张照片最打动你的地方")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.practiceMuted.opacity(0.72))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 16)
+                }
+
+                TextEditor(text: $store.noteText)
+                    .focused($isNoteFocused)
+                    .frame(minHeight: 84)
+                    .padding(8)
+                    .scrollContentBackground(.hidden)
+                    .foregroundStyle(Color.practiceInk)
+                    .background(Color.clear)
+                    .tint(Color.practiceAqua)
+            }
+            .background(Color.white.opacity(0.62))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.practiceAqua.opacity(isNoteFocused ? 0.48 : 0.18), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 8) {
                 ForEach(observationTags, id: \.self) { tag in
@@ -171,6 +187,8 @@ struct ViewerView: View {
 
 struct PhotoStage: View {
     @EnvironmentObject private var store: PhotoPracticeStore
+    @State private var isShowingFullscreen = false
+
     let photo: PhotoItem
 
     var body: some View {
@@ -181,6 +199,10 @@ struct PhotoStage: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
+                    .contentShape(Rectangle())
+                    .onLongPressGesture {
+                        isShowingFullscreen = true
+                    }
             } else {
                 VStack(spacing: 8) {
                     Text("图片未找到")
@@ -196,5 +218,110 @@ struct PhotoStage: View {
         .frame(maxWidth: .infinity)
         .frame(height: 340)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .fullScreenCover(isPresented: $isShowingFullscreen) {
+            if let image = store.image(for: photo) {
+                FullscreenPhotoView(image: image, title: photo.title ?? photo.filename)
+            }
+        }
+    }
+}
+
+struct FullscreenPhotoView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let image: UIImage
+    let title: String
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+
+            ZoomableImage(image: image)
+                .ignoresSafeArea()
+
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(.black.opacity(0.48))
+                    .clipShape(Circle())
+            }
+            .accessibilityLabel("关闭")
+            .padding(.top, 18)
+            .padding(.trailing, 16)
+        }
+        .statusBarHidden(true)
+    }
+}
+
+struct ZoomableImage: UIViewRepresentable {
+    let image: UIImage
+
+    func makeUIView(context: Context) -> UIScrollView {
+        let scrollView = UIScrollView()
+        scrollView.delegate = context.coordinator
+        scrollView.minimumZoomScale = 1
+        scrollView.maximumZoomScale = 6
+        scrollView.bouncesZoom = true
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.backgroundColor = .black
+
+        let imageView = UIImageView(image: image)
+        imageView.contentMode = .scaleAspectFit
+        imageView.isUserInteractionEnabled = true
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(imageView)
+        context.coordinator.imageView = imageView
+
+        NSLayoutConstraint.activate([
+            imageView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            imageView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            imageView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            imageView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+            imageView.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor)
+        ])
+
+        let doubleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleDoubleTap(_:)))
+        doubleTap.numberOfTapsRequired = 2
+        scrollView.addGestureRecognizer(doubleTap)
+
+        return scrollView
+    }
+
+    func updateUIView(_ scrollView: UIScrollView, context: Context) {
+        context.coordinator.imageView?.image = image
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator: NSObject, UIScrollViewDelegate {
+        weak var imageView: UIImageView?
+
+        func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+            imageView
+        }
+
+        @objc func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
+            guard let scrollView = gesture.view as? UIScrollView else { return }
+
+            if scrollView.zoomScale > scrollView.minimumZoomScale {
+                scrollView.setZoomScale(scrollView.minimumZoomScale, animated: true)
+            } else {
+                let point = gesture.location(in: imageView)
+                let zoomScale = min(scrollView.maximumZoomScale, 3)
+                let width = scrollView.bounds.width / zoomScale
+                let height = scrollView.bounds.height / zoomScale
+                let originX = point.x - width / 2
+                let originY = point.y - height / 2
+                scrollView.zoom(to: CGRect(x: originX, y: originY, width: width, height: height), animated: true)
+            }
+        }
     }
 }
