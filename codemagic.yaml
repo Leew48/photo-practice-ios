@@ -46,6 +46,62 @@ workflows:
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
       - /tmp/xcodebuild_logs/*.log
 
+  ios-sideloadly-ipa:
+    name: PhotoPractice Unsigned IPA for Sideloadly
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      xcode: latest
+      vars:
+        IOS_DIR: "ios-app"
+        BUNDLE_ID: "com.local.photopractice"
+        XCODE_PROJECT: "PhotoPractice.xcodeproj"
+        XCODE_SCHEME: "PhotoPractice"
+    scripts:
+      - name: Install XcodeGen
+        script: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+      - name: Configure bundle id
+        script: |
+          cd "$IOS_DIR"
+          bash scripts/set-ios-bundle-id.sh "$BUNDLE_ID"
+      - name: Validate reader app source
+        script: |
+          cd "$IOS_DIR"
+          bash scripts/validate-ios-offline.sh
+      - name: Generate Xcode project
+        script: |
+          cd "$IOS_DIR"
+          xcodegen generate
+      - name: Build unsigned device app
+        script: |
+          cd "$IOS_DIR"
+          xcodebuild \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -sdk iphoneos \
+            -configuration Debug \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+      - name: Package unsigned IPA
+        script: |
+          cd "$IOS_DIR"
+          APP_PATH="build/DerivedData/Build/Products/Debug-iphoneos/PhotoPractice.app"
+          test -d "$APP_PATH"
+          rm -rf build/sideloadly
+          mkdir -p build/sideloadly/Payload
+          cp -R "$APP_PATH" build/sideloadly/Payload/
+          cd build/sideloadly
+          zip -qry ../PhotoPractice-unsigned.ipa Payload
+    artifacts:
+      - ios-app/build/PhotoPractice-unsigned.ipa
+      - /tmp/xcodebuild_logs/*.log
+
   ios-testflight:
     name: PhotoPractice TestFlight
     max_build_duration: 60
@@ -101,4 +157,3 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
-
