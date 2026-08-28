@@ -62,7 +62,6 @@ workflows:
         BUNDLE_ID: "com.yourname.photopractice"
         XCODE_PROJECT: "PhotoPractice.xcodeproj"
         XCODE_SCHEME: "PhotoPractice"
-        APP_STORE_APPLE_ID: ""
     scripts:
       - name: Show app source size
         script: |
@@ -102,3 +101,4 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
+
