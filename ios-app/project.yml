@@ -21,6 +21,7 @@ targets:
       - path: PhotoPractice/Views
     resources:
       - path: PhotoPractice/Assets.xcassets
+      - path: PhotoPractice/Resources/PhotoMetadata
     dependencies:
       - package: ZIPFoundation
     settings:

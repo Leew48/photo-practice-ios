@@ -18,19 +18,25 @@ struct TodayView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                backgroundLayer
+            GeometryReader { proxy in
+                ZStack(alignment: .top) {
+                    backgroundLayer(size: proxy.size)
 
-                ScrollView {
-                    VStack(spacing: 16) {
-                        hero
-                        actions
-                        stats
-                        todayRecords
+                    ScrollView {
+                        VStack(spacing: 12) {
+                            hero
+                            actions
+                            stats
+                            todayRecords
+                        }
+                        .frame(maxWidth: proxy.size.width - 32)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        .padding(.bottom, 92)
                     }
-                    .padding()
-                    .padding(.bottom, 86)
+                    .scrollIndicators(.hidden)
                 }
+                .frame(width: proxy.size.width, height: proxy.size.height)
             }
             .navigationTitle("看图计划")
             .onAppear(perform: pickBackgroundPhotoIfNeeded)
@@ -40,7 +46,7 @@ struct TodayView: View {
         }
     }
 
-    private var backgroundLayer: some View {
+    private func backgroundLayer(size: CGSize) -> some View {
         ZStack {
             Color.practicePaper
 
@@ -48,59 +54,69 @@ struct TodayView: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .ignoresSafeArea()
-                    .overlay(.black.opacity(0.42))
-                    .blur(radius: 1.5)
+                    .frame(width: size.width, height: size.height)
+                    .clipped()
+                    .blur(radius: 1.2)
+                    .overlay(Color.practiceInk.opacity(0.28))
+                    .saturation(0.82)
             }
 
             LinearGradient(
-                colors: [Color.black.opacity(0.22), Color.practicePaper.opacity(0.92)],
+                colors: [
+                    Color.white.opacity(0.18),
+                    Color.practicePaper.opacity(0.72),
+                    Color.practicePaper.opacity(0.9)
+                ],
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .ignoresSafeArea()
         }
+        .frame(width: size.width, height: size.height)
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
     }
 
     private var hero: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 14) {
             ZStack {
                 Circle()
-                    .stroke(.white.opacity(0.24), lineWidth: 12)
+                    .stroke(Color.practiceMint.opacity(0.38), lineWidth: 9)
                 Circle()
                     .trim(from: 0, to: progressRatio)
-                    .stroke(Color.practiceGold, style: StrokeStyle(lineWidth: 12, lineCap: .round))
+                    .stroke(Color.practicePeach, style: StrokeStyle(lineWidth: 9, lineCap: .round))
                     .rotationEffect(.degrees(-90))
-                VStack(spacing: 2) {
+                VStack(spacing: 0) {
                     Text("\(store.todayRecords.count)")
-                        .font(.system(size: 34, weight: .bold))
+                        .font(.system(size: 28, weight: .bold))
                     Text("/ \(store.progress.dailyTarget)")
-                        .font(.footnote)
+                        .font(.caption)
                         .opacity(0.72)
                 }
             }
-            .frame(width: 118, height: 118)
+            .frame(width: 92, height: 92)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("今天")
-                    .font(.subheadline.weight(.semibold))
-                    .opacity(0.72)
+                    .font(.caption.weight(.semibold))
+                    .opacity(0.76)
                 Text(todayMessage)
-                    .font(.title3.weight(.bold))
+                    .font(.headline.weight(.bold))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
                 Text("离线图库 \(store.photos.count) 张")
-                    .font(.footnote)
+                    .font(.caption)
                     .opacity(0.74)
             }
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .foregroundStyle(.white)
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.practiceForest.opacity(0.76))
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        )
+        .foregroundStyle(Color.practiceInk)
+        .padding(14)
+        .background(Color.practiceMint.opacity(0.86))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.white.opacity(0.56), lineWidth: 1)
+        )
     }
 
     private var actions: some View {
@@ -109,6 +125,8 @@ struct TodayView: View {
                 store.startSession()
             } label: {
                 Label("看未看照片", systemImage: "play.fill")
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(PrimaryPracticeButtonStyle())
@@ -118,6 +136,8 @@ struct TodayView: View {
                 pickBackgroundPhoto(force: true)
             } label: {
                 Label("随机一张", systemImage: "shuffle")
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(SecondaryPracticeButtonStyle())
@@ -173,17 +193,23 @@ struct StatTile: View {
     let value: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 5) {
             Text(label)
                 .font(.caption)
                 .foregroundStyle(Color.practiceMuted)
             Text(value)
-                .font(.title3.weight(.bold))
+                .font(.headline.weight(.bold))
                 .foregroundStyle(Color.practiceInk)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(.white.opacity(0.86))
+        .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+        .padding(10)
+        .background(Color.white.opacity(0.76))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.white.opacity(0.52), lineWidth: 1)
+        )
     }
 }

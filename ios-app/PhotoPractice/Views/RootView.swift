@@ -37,7 +37,7 @@ struct RootView: View {
                 }
                 .tag(AppTab.settings)
         }
-        .tint(.practiceForest)
+        .tint(.practiceAqua)
         .onAppear {
             if !hasSeenOnboarding {
                 showingOnboarding = true
@@ -137,10 +137,14 @@ struct OnboardingRow: View {
 }
 
 extension Color {
-    static let practiceInk = Color(red: 0.07, green: 0.09, blue: 0.09)
-    static let practiceMuted = Color(red: 0.38, green: 0.44, blue: 0.43)
-    static let practicePaper = Color(red: 0.98, green: 0.98, blue: 0.95)
-    static let practiceForest = Color(red: 0.07, green: 0.23, blue: 0.20)
-    static let practiceClay = Color(red: 0.71, green: 0.36, blue: 0.23)
-    static let practiceGold = Color(red: 0.83, green: 0.66, blue: 0.25)
+    static let practiceInk = Color(red: 0.09, green: 0.13, blue: 0.14)
+    static let practiceMuted = Color(red: 0.43, green: 0.53, blue: 0.54)
+    static let practicePaper = Color(red: 0.99, green: 0.98, blue: 0.94)
+    static let practiceForest = Color(red: 0.09, green: 0.29, blue: 0.25)
+    static let practiceClay = Color(red: 0.86, green: 0.48, blue: 0.36)
+    static let practiceGold = Color(red: 0.95, green: 0.76, blue: 0.30)
+    static let practiceMint = Color(red: 0.74, green: 0.91, blue: 0.85)
+    static let practicePeach = Color(red: 0.98, green: 0.63, blue: 0.52)
+    static let practiceAqua = Color(red: 0.32, green: 0.68, blue: 0.70)
+    static let practiceLilac = Color(red: 0.77, green: 0.74, blue: 0.91)
 }

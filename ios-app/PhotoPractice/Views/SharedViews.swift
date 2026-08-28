@@ -7,7 +7,7 @@ struct EmptyPanel: View {
         VStack(spacing: 12) {
             Image(systemName: "photo.on.rectangle.angled")
                 .font(.system(size: 34))
-                .foregroundStyle(Color.practiceClay)
+                .foregroundStyle(Color.practicePeach)
             Text(text)
                 .font(.subheadline)
                 .foregroundStyle(Color.practiceMuted)
@@ -15,7 +15,7 @@ struct EmptyPanel: View {
         }
         .frame(maxWidth: .infinity)
         .padding(24)
-        .background(.white.opacity(0.82))
+        .background(Color.white.opacity(0.74))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
@@ -36,7 +36,7 @@ struct InfoGrid: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 58, alignment: .topLeading)
                 .padding(10)
-                .background(.white)
+                .background(Color.white.opacity(0.72))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
         }
@@ -48,9 +48,9 @@ struct PrimaryPracticeButtonStyle: ButtonStyle {
         configuration.label
             .font(.subheadline.weight(.bold))
             .foregroundStyle(.white)
-            .padding(.horizontal, 14)
-            .frame(minHeight: 48)
-            .background(Color.practiceForest.opacity(configuration.isPressed ? 0.82 : 1))
+            .padding(.horizontal, 12)
+            .frame(minHeight: 46)
+            .background(Color.practiceAqua.opacity(configuration.isPressed ? 0.78 : 0.96))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
@@ -60,12 +60,12 @@ struct SecondaryPracticeButtonStyle: ButtonStyle {
         configuration.label
             .font(.subheadline.weight(.bold))
             .foregroundStyle(Color.practiceForest)
-            .padding(.horizontal, 14)
-            .frame(minHeight: 48)
-            .background(.white.opacity(configuration.isPressed ? 0.68 : 0.92))
+            .padding(.horizontal, 12)
+            .frame(minHeight: 46)
+            .background(Color.white.opacity(configuration.isPressed ? 0.64 : 0.82))
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.practiceMuted.opacity(0.22), lineWidth: 1)
+                    .stroke(Color.practiceAqua.opacity(0.24), lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
@@ -79,7 +79,7 @@ struct TagButtonStyle: ButtonStyle {
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(selected ? .white : Color.practiceForest)
             .frame(minHeight: 38)
-            .background(selected ? Color.practiceForest : Color.practiceForest.opacity(configuration.isPressed ? 0.2 : 0.11))
+            .background(selected ? Color.practiceAqua : Color.practiceMint.opacity(configuration.isPressed ? 0.55 : 0.36))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
@@ -88,7 +88,7 @@ extension View {
     func panelStyle() -> some View {
         self
             .padding(16)
-            .background(.white.opacity(0.86))
+            .background(Color.white.opacity(0.76))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }

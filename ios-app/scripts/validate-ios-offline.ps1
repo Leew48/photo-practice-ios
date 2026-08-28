@@ -20,9 +20,10 @@ Assert-Exists $projectFile "XcodeGen project file"
 Assert-Exists $infoPlistPath "Info.plist"
 Assert-Exists $appIconPath "AppIcon catalog"
 Assert-Exists (Join-Path $sourceRoot "Services\ZipArchiveReader.swift") "ZIP archive reader"
+Assert-Exists (Join-Path $sourceRoot "Resources\PhotoMetadata\ippawards-metadata.json") "photo metadata manifest"
 
 $projectYaml = Get-Content -Raw -LiteralPath $projectFile
-@("PhotoPractice/App", "PhotoPractice/Models", "PhotoPractice/Services", "PhotoPractice/Views", "PhotoPractice/Assets.xcassets", "ZIPFoundation") | ForEach-Object {
+@("PhotoPractice/App", "PhotoPractice/Models", "PhotoPractice/Services", "PhotoPractice/Views", "PhotoPractice/Assets.xcassets", "PhotoPractice/Resources/PhotoMetadata", "ZIPFoundation") | ForEach-Object {
   if (-not $projectYaml.Contains($_)) {
     throw "project.yml does not include $_"
   }
@@ -67,4 +68,3 @@ Write-Host "OK: PhotoPractice reader-mode iOS source check passed."
 Write-Host "Swift files: $($swiftFiles.Count)"
 Write-Host "Note: image ZIP packs are imported in the app from the iOS Files picker."
 Write-Host "Note: run xcodegen + xcodebuild on macOS or Codemagic for the real iOS compile check."
-

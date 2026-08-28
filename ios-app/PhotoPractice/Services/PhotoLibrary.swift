@@ -20,6 +20,7 @@ enum PhotoLibraryError: LocalizedError {
 
 final class PhotoLibrary {
     private let resourceRoot = "PhotoLibrary"
+    private let metadataRoot = "PhotoMetadata"
     private let importedRootName = "ImportedPhotoLibrary"
     private let imageCache = NSCache<NSString, UIImage>()
     private let fileManager = FileManager.default
@@ -32,7 +33,7 @@ final class PhotoLibrary {
 
     func loadPhotos() throws -> [PhotoItem] {
         if let importedManifestURL, fileManager.fileExists(atPath: importedManifestURL.path) {
-            return try loadManifest(from: importedManifestURL)
+            return enrichImportedPhotos(try loadManifest(from: importedManifestURL))
         }
 
         guard let url = bundledManifestURL else {
@@ -150,18 +151,14 @@ final class PhotoLibrary {
 
     private func photoItem(for imageURL: URL, rootURL: URL, metadata: [String: PhotoItem]) -> PhotoItem {
         let relativePath = relativePath(for: imageURL, under: rootURL)
-        if let manifestPhoto = metadata[normalizedPath(relativePath)] ?? metadata[metadataLookupPath(for: relativePath)] {
-            return manifestPhoto
+        if let manifestPhoto = metadataMatch(forPath: relativePath, filename: imageURL.lastPathComponent, in: metadata) {
+            return mergedPhoto(localPath: relativePath, localFilename: imageURL.lastPathComponent, metadata: manifestPhoto)
         }
 
         let components = relativePath.split(separator: "/").map(String.init)
         let filename = imageURL.lastPathComponent
         let category = inferredCategory(from: components)
-        let year = components.compactMap { component -> Int? in
-            let digits = component.filter(\.isNumber)
-            guard digits.count == 4 else { return nil }
-            return Int(digits)
-        }.first
+        let year = inferredYear(from: components)
 
         return PhotoItem(
             filename: filename,
@@ -194,29 +191,66 @@ final class PhotoLibrary {
             let manifestFolder = relativePath(for: manifestURL.deletingLastPathComponent(), under: rootURL)
             for photo in manifest.photos {
                 let localPath = localPath(for: photo.path, manifestFolder: manifestFolder)
-                let enriched = PhotoItem(
-                    filename: photo.filename,
-                    path: localPath,
-                    title: photo.title,
-                    photographer: photo.photographer,
-                    source: photo.source,
-                    website: photo.website,
-                    category: photo.category,
-                    description: photo.description,
-                    tags: photo.tags,
-                    year: photo.year,
-                    award: photo.award,
-                    country: photo.country,
-                    location: photo.location,
-                    cameraInfo: photo.cameraInfo,
-                    originalImageURL: photo.originalImageURL
-                )
-                metadata[normalizedPath(localPath)] = enriched
-                metadata[metadataLookupPath(for: localPath)] = enriched
+                let enriched = mergedPhoto(localPath: localPath, localFilename: photo.filename, metadata: photo)
+                index(photo: enriched, localPath: localPath, in: &metadata)
+            }
+        }
+
+        if let bundledMetadataManifestURL,
+           let manifest = try? decoder.decode(PhotoManifest.self, from: Data(contentsOf: bundledMetadataManifestURL)) {
+            for photo in manifest.photos {
+                index(photo: photo, localPath: photo.path, in: &metadata)
             }
         }
 
         return metadata
+    }
+
+    private func enrichImportedPhotos(_ photos: [PhotoItem]) -> [PhotoItem] {
+        guard let metadata = try? importedMetadataByPath(in: importedRootURL()) else {
+            return photos
+        }
+
+        return photos.map { photo in
+            guard let manifestPhoto = metadataMatch(forPath: photo.path, filename: photo.filename, in: metadata) else {
+                return photo
+            }
+            return mergedPhoto(localPath: photo.path, localFilename: photo.filename, metadata: manifestPhoto)
+        }
+    }
+
+    private func index(photo: PhotoItem, localPath: String, in metadata: inout [String: PhotoItem]) {
+        metadata[normalizedPath(localPath)] = photo
+        metadata[metadataLookupPath(for: localPath)] = photo
+        metadata[normalizedFilename(photo.filename)] = photo
+        metadata[normalizedFilename(URL(fileURLWithPath: localPath).lastPathComponent)] = photo
+    }
+
+    private func metadataMatch(forPath path: String, filename: String, in metadata: [String: PhotoItem]) -> PhotoItem? {
+        metadata[normalizedPath(path)]
+            ?? metadata[metadataLookupPath(for: path)]
+            ?? metadata[normalizedFilename(filename)]
+            ?? metadata[normalizedFilename(URL(fileURLWithPath: path).lastPathComponent)]
+    }
+
+    private func mergedPhoto(localPath: String, localFilename: String, metadata: PhotoItem) -> PhotoItem {
+        PhotoItem(
+            filename: localFilename,
+            path: localPath,
+            title: metadata.title,
+            photographer: metadata.photographer,
+            source: metadata.source,
+            website: metadata.website,
+            category: metadata.category,
+            description: metadata.description,
+            tags: metadata.tags,
+            year: metadata.year,
+            award: metadata.award,
+            country: metadata.country,
+            location: metadata.location,
+            cameraInfo: metadata.cameraInfo,
+            originalImageURL: metadata.originalImageURL
+        )
     }
 
     private func manifestURLs(under rootURL: URL) -> [URL] {
@@ -267,6 +301,16 @@ final class PhotoLibrary {
             return components[photosIndex + 1]
         }
         return components.dropLast().last
+    }
+
+    private func inferredYear(from components: [String]) -> Int? {
+        components.dropLast().compactMap { component -> Int? in
+            let digits = component.filter(\.isNumber)
+            guard digits.count == 4, let year = Int(digits), (1900...2100).contains(year) else {
+                return nil
+            }
+            return year
+        }.first
     }
 
     private func imageURL(for photo: PhotoItem) -> URL? {
@@ -371,6 +415,10 @@ final class PhotoLibrary {
 
     private var bundledManifestURL: URL? {
         Bundle.main.url(forResource: "photo-manifest", withExtension: "json", subdirectory: resourceRoot)
+    }
+
+    private var bundledMetadataManifestURL: URL? {
+        Bundle.main.url(forResource: "ippawards-metadata", withExtension: "json", subdirectory: metadataRoot) ?? Bundle.main.url(forResource: "ippawards-metadata", withExtension: "json")
     }
 
     private var importedManifestURL: URL? {
