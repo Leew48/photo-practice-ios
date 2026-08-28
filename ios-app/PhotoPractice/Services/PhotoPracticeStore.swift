@@ -53,6 +53,10 @@ final class PhotoPracticeStore: ObservableObject {
         library.image(for: photo)
     }
 
+    func imageLoadStatus(for photo: PhotoItem) -> String {
+        library.imageLoadStatus(for: photo)
+    }
+
     func importPhotoArchive(from url: URL) throws -> Int {
         let count = try library.importArchive(from: url)
         usesImportedLibrary = true
@@ -235,3 +239,4 @@ enum AppTab: Hashable {
     case review
     case settings
 }
+

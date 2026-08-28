@@ -23,6 +23,7 @@ final class PhotoLibrary {
     private let importedRootName = "ImportedPhotoLibrary"
     private let imageCache = NSCache<NSString, UIImage>()
     private let fileManager = FileManager.default
+    private var importedImageIndex: [String: URL]?
 
     init() {
         imageCache.countLimit = 120
@@ -55,8 +56,22 @@ final class PhotoLibrary {
         return image
     }
 
+    func imageLoadStatus(for photo: PhotoItem) -> String {
+        guard let url = imageURL(for: photo) else {
+            return "未找到文件：\(photo.path)"
+        }
+        guard fileManager.fileExists(atPath: url.path) else {
+            return "文件不存在：\(url.lastPathComponent)"
+        }
+        guard UIImage(contentsOfFile: url.path) != nil else {
+            let attributes = try? fileManager.attributesOfItem(atPath: url.path)
+            let size = (attributes?[.size] as? NSNumber)?.intValue ?? 0
+            return "图片无法解码：\(url.lastPathComponent)，\(size) bytes"
+        }
+        return "OK"
+    }
+
     func importArchive(from archiveURL: URL) throws -> Int {
-        let archiveData = try Data(contentsOf: archiveURL)
         let destinationURL = try importedRootURL()
         let stagingURL = destinationURL.deletingLastPathComponent()
             .appendingPathComponent("\(importedRootName)-staging", isDirectory: true)
@@ -66,7 +81,7 @@ final class PhotoLibrary {
         }
         try fileManager.createDirectory(at: stagingURL, withIntermediateDirectories: true)
 
-        _ = try ZipArchiveReader(data: archiveData).extractImages(to: stagingURL)
+        _ = try ZipArchiveReader(archiveURL: archiveURL).extractImages(to: stagingURL)
         let photos = try scanImportedPhotos(in: stagingURL)
         guard !photos.isEmpty else {
             throw PhotoLibraryError.noImagesInArchive
@@ -101,6 +116,7 @@ final class PhotoLibrary {
 
     func clearCache() {
         imageCache.removeAllObjects()
+        importedImageIndex = nil
     }
 
     private func loadManifest(from url: URL) throws -> [PhotoItem] {
@@ -110,6 +126,13 @@ final class PhotoLibrary {
     }
 
     private func scanImportedPhotos(in rootURL: URL) throws -> [PhotoItem] {
+        let imageURLs = allImageURLs(under: rootURL)
+        return imageURLs
+            .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+            .map { photoItem(for: $0, rootURL: rootURL) }
+    }
+
+    private func allImageURLs(under rootURL: URL) -> [URL] {
         guard let enumerator = fileManager.enumerator(
             at: rootURL,
             includingPropertiesForKeys: [.isRegularFileKey],
@@ -118,20 +141,14 @@ final class PhotoLibrary {
             return []
         }
 
-        let imageURLs = enumerator.compactMap { item -> URL? in
+        return enumerator.compactMap { item -> URL? in
             guard let url = item as? URL, Self.isImageURL(url) else { return nil }
             return url
         }
-
-        return imageURLs
-            .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
-            .map { photoItem(for: $0, rootURL: rootURL) }
     }
 
     private func photoItem(for imageURL: URL, rootURL: URL) -> PhotoItem {
-        let relativePath = imageURL.path(percentEncoded: false)
-            .replacingOccurrences(of: rootURL.path(percentEncoded: false) + "/", with: "")
-            .replacingOccurrences(of: "\\", with: "/")
+        let relativePath = relativePath(for: imageURL, under: rootURL)
         let components = relativePath.split(separator: "/").map(String.init)
         let filename = imageURL.lastPathComponent
         let category = inferredCategory(from: components)
@@ -160,6 +177,15 @@ final class PhotoLibrary {
         )
     }
 
+    private func relativePath(for imageURL: URL, under rootURL: URL) -> String {
+        let rootPath = normalizedPath(rootURL.path(percentEncoded: false))
+        let imagePath = normalizedPath(imageURL.path(percentEncoded: false))
+        if imagePath.hasPrefix(rootPath + "/") {
+            return String(imagePath.dropFirst(rootPath.count + 1))
+        }
+        return imageURL.lastPathComponent
+    }
+
     private func inferredCategory(from components: [String]) -> String? {
         guard components.count > 1 else { return nil }
         if let photosIndex = components.firstIndex(where: { $0.lowercased() == "photos" }),
@@ -170,8 +196,8 @@ final class PhotoLibrary {
     }
 
     private func imageURL(for photo: PhotoItem) -> URL? {
-        if let importedURL = try? url(forRelativePath: photo.path, under: importedRootURL()),
-           fileManager.fileExists(atPath: importedURL.path) {
+        if let importedRootURL = try? importedRootURL(),
+           let importedURL = existingImageURL(for: photo, under: importedRootURL) {
             return importedURL
         }
 
@@ -180,12 +206,75 @@ final class PhotoLibrary {
         else {
             return nil
         }
-        return try? url(forRelativePath: photo.path, under: bundledRootURL)
+        return existingImageURL(for: photo, under: bundledRootURL)
+    }
+
+    private func existingImageURL(for photo: PhotoItem, under rootURL: URL) -> URL? {
+        for candidate in candidateRelativePaths(for: photo) {
+            if let url = try? url(forRelativePath: candidate, under: rootURL),
+               fileManager.fileExists(atPath: url.path) {
+                return url
+            }
+        }
+
+        if rootURL.lastPathComponent == importedRootName {
+            return indexedImportedImageURL(for: photo, under: rootURL)
+        }
+
+        return nil
+    }
+
+    private func indexedImportedImageURL(for photo: PhotoItem, under rootURL: URL) -> URL? {
+        if importedImageIndex == nil {
+            importedImageIndex = buildImageIndex(under: rootURL)
+        }
+
+        let filename = normalizedFilename(photo.filename)
+        if let url = importedImageIndex?[filename] {
+            return url
+        }
+
+        let pathFilename = normalizedFilename(URL(fileURLWithPath: photo.path).lastPathComponent)
+        return importedImageIndex?[pathFilename]
+    }
+
+    private func buildImageIndex(under rootURL: URL) -> [String: URL] {
+        var index: [String: URL] = [:]
+        for url in allImageURLs(under: rootURL) {
+            index[normalizedFilename(url.lastPathComponent)] = url
+        }
+        return index
+    }
+
+    private func candidateRelativePaths(for photo: PhotoItem) -> [String] {
+        let normalized = normalizedPath(photo.path.removingPercentEncoding ?? photo.path)
+        var candidates: [String] = [normalized]
+
+        if let range = normalized.range(of: "\(importedRootName)-staging/") {
+            candidates.append(String(normalized[range.upperBound...]))
+        }
+
+        if let range = normalized.range(of: "\(importedRootName)/") {
+            candidates.append(String(normalized[range.upperBound...]))
+        }
+
+        if normalized.hasPrefix("/") {
+            candidates.append(URL(fileURLWithPath: normalized).lastPathComponent)
+        }
+
+        candidates.append(photo.filename)
+        candidates.append(URL(fileURLWithPath: normalized).lastPathComponent)
+
+        var seen: Set<String> = []
+        return candidates.filter { candidate in
+            guard !candidate.isEmpty, !seen.contains(candidate) else { return false }
+            seen.insert(candidate)
+            return true
+        }
     }
 
     private func url(forRelativePath relativePath: String, under rootURL: URL) throws -> URL {
-        let components = relativePath
-            .replacingOccurrences(of: "\\", with: "/")
+        let components = normalizedPath(relativePath)
             .split(separator: "/")
             .map(String.init)
         guard !components.isEmpty, !components.contains("..") else {
@@ -195,6 +284,16 @@ final class PhotoLibrary {
         return components.reduce(rootURL) { url, component in
             url.appendingPathComponent(component, isDirectory: false)
         }
+    }
+
+    private func normalizedPath(_ path: String) -> String {
+        path
+            .replacingOccurrences(of: "\\", with: "/")
+            .replacingOccurrences(of: "//", with: "/")
+    }
+
+    private func normalizedFilename(_ filename: String) -> String {
+        (filename.removingPercentEncoding ?? filename).precomposedStringWithCanonicalMapping.lowercased()
     }
 
     private var bundledManifestURL: URL? {
@@ -219,4 +318,6 @@ final class PhotoLibrary {
         ["jpg", "jpeg", "png", "heic", "heif", "webp"].contains(url.pathExtension.lowercased())
     }
 }
+
+
 

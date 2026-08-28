@@ -6,6 +6,10 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
+packages:
+  ZIPFoundation:
+    url: https://github.com/weichsel/ZIPFoundation.git
+    from: "0.9.19"
 targets:
   PhotoPractice:
     type: application
@@ -17,6 +21,8 @@ targets:
       - path: PhotoPractice/Views
     resources:
       - path: PhotoPractice/Assets.xcassets
+    dependencies:
+      - package: ZIPFoundation
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.local.photopractice

@@ -133,8 +133,15 @@ struct PhotoStage: View {
                     .resizable()
                     .scaledToFit()
             } else {
-                Text("图片未找到")
-                    .foregroundStyle(.white.opacity(0.72))
+                VStack(spacing: 8) {
+                    Text("图片未找到")
+                        .font(.headline)
+                    Text(store.imageLoadStatus(for: photo))
+                        .font(.caption)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+                .foregroundStyle(.white.opacity(0.72))
             }
         }
         .frame(maxWidth: .infinity)
@@ -142,3 +149,4 @@ struct PhotoStage: View {
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
+

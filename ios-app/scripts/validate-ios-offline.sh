@@ -36,6 +36,7 @@ for token in [
     "PhotoPractice/Services",
     "PhotoPractice/Views",
     "PhotoPractice/Assets.xcassets",
+    "ZIPFoundation",
 ]:
     if token not in project_yaml:
         raise SystemExit(f"project.yml does not include {token}")
@@ -88,3 +89,4 @@ print(f"Swift files: {len(swift_files)}")
 print("Note: image ZIP packs are imported in the app from the iOS Files picker.")
 print("Note: run xcodegen + xcodebuild on macOS or Codemagic for the real iOS compile check.")
 PY
+
