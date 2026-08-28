@@ -1,0 +1,43 @@
+# Local runtime files
+tailscale-setup-*.msi
+tailscale-setup-*.sha256
+tailscale-install.log
+
+# Root web/PWA photo library copies are local handoff data.
+/ippawards-2012/
+/ippawards-2013/
+/ippawards-2014/
+/ippawards-2015/
+/ippawards-2016/
+/ippawards-2017/
+/ippawards-2018/
+/ippawards-2019/
+/ippawards-2020/
+/ippawards-2021/
+/ippawards-2022/
+/ippawards-2023/
+/ippawards-2024/
+/ippawards-2025/
+/ippawards-2026/
+
+# Reader-mode image packs stay outside the app repository.
+ios-app/PhotoPractice/Resources/PhotoLibrary/
+ios-app/PhotoLibrary.zip
+*.photos.zip
+
+# Apple / Xcode
+DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+ios-app/build/
+ios-app/*.ipa
+ios-app/PhotoPractice.xcodeproj/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Dependency folders
+node_modules/
