@@ -11,6 +11,7 @@ import struct
 
 root = pathlib.Path(os.environ["IOS_ROOT"])
 project_file = root / "project.yml"
+info_plist = root / "PhotoPractice" / "Info.plist"
 app_icon_json = root / "PhotoPractice" / "Assets.xcassets" / "AppIcon.appiconset" / "Contents.json"
 zip_reader = root / "PhotoPractice" / "Services" / "ZipArchiveReader.swift"
 
@@ -22,6 +23,7 @@ def require(path, label):
 
 for path, label in [
     (project_file, "XcodeGen project file"),
+    (info_plist, "Info.plist"),
     (app_icon_json, "AppIcon catalog"),
     (zip_reader, "ZIP archive reader"),
 ]:
@@ -40,6 +42,18 @@ for token in [
 
 if "PhotoPractice/Resources/PhotoLibrary" in project_yaml:
     raise SystemExit("project.yml should not bundle the full photo library in reader mode")
+
+info_plist_text = info_plist.read_text(encoding="utf-8")
+for token in [
+    "CFBundleIdentifier",
+    "PRODUCT_BUNDLE_IDENTIFIER",
+    "CFBundleExecutable",
+    "EXECUTABLE_NAME",
+    "CFBundleVersion",
+    "CURRENT_PROJECT_VERSION",
+]:
+    if token not in info_plist_text:
+        raise SystemExit(f"Info.plist does not include {token}")
 
 
 def png_size(path):

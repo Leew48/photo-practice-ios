@@ -13,9 +13,11 @@ function Assert-Exists {
 
 $projectFile = Join-Path $IOSRoot "project.yml"
 $sourceRoot = Join-Path $IOSRoot "PhotoPractice"
+$infoPlistPath = Join-Path $sourceRoot "Info.plist"
 $appIconPath = Join-Path $sourceRoot "Assets.xcassets\AppIcon.appiconset\Contents.json"
 
 Assert-Exists $projectFile "XcodeGen project file"
+Assert-Exists $infoPlistPath "Info.plist"
 Assert-Exists $appIconPath "AppIcon catalog"
 Assert-Exists (Join-Path $sourceRoot "Services\ZipArchiveReader.swift") "ZIP archive reader"
 
@@ -28,6 +30,13 @@ $projectYaml = Get-Content -Raw -LiteralPath $projectFile
 
 if ($projectYaml.Contains("PhotoPractice/Resources/PhotoLibrary")) {
   throw "project.yml should not bundle the full photo library in reader mode"
+}
+
+$infoPlist = Get-Content -Raw -LiteralPath $infoPlistPath
+@("CFBundleIdentifier", "PRODUCT_BUNDLE_IDENTIFIER", "CFBundleExecutable", "EXECUTABLE_NAME", "CFBundleVersion", "CURRENT_PROJECT_VERSION") | ForEach-Object {
+  if (-not $infoPlist.Contains($_)) {
+    throw "Info.plist does not include $_"
+  }
 }
 
 Add-Type -AssemblyName System.Drawing
