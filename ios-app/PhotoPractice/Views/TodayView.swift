@@ -2,25 +2,63 @@ import SwiftUI
 
 struct TodayView: View {
     @EnvironmentObject private var store: PhotoPracticeStore
+    @State private var backgroundPhotoID: String?
 
     private var progressRatio: Double {
         guard store.progress.dailyTarget > 0 else { return 0 }
         return min(Double(store.todayRecords.count) / Double(store.progress.dailyTarget), 1)
     }
 
+    private var backgroundPhoto: PhotoItem? {
+        if let backgroundPhotoID, let photo = store.photo(withID: backgroundPhotoID) {
+            return photo
+        }
+        return store.photos.first
+    }
+
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    hero
-                    actions
-                    stats
-                    todayRecords
+            ZStack {
+                backgroundLayer
+
+                ScrollView {
+                    VStack(spacing: 16) {
+                        hero
+                        actions
+                        stats
+                        todayRecords
+                    }
+                    .padding()
+                    .padding(.bottom, 86)
                 }
-                .padding()
             }
-            .background(Color.practicePaper.ignoresSafeArea())
             .navigationTitle("看图计划")
+            .onAppear(perform: pickBackgroundPhotoIfNeeded)
+            .onChange(of: store.photos.count) { _, _ in
+                pickBackgroundPhoto(force: true)
+            }
+        }
+    }
+
+    private var backgroundLayer: some View {
+        ZStack {
+            Color.practicePaper
+
+            if let backgroundPhoto, let image = store.image(for: backgroundPhoto) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .ignoresSafeArea()
+                    .overlay(.black.opacity(0.42))
+                    .blur(radius: 1.5)
+            }
+
+            LinearGradient(
+                colors: [Color.black.opacity(0.22), Color.practicePaper.opacity(0.92)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
         }
     }
 
@@ -58,7 +96,9 @@ struct TodayView: View {
         .foregroundStyle(.white)
         .padding(20)
         .background(
-            LinearGradient(colors: [.practiceForest, Color(red: 0.22, green: 0.49, blue: 0.57)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.practiceForest.opacity(0.76))
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         )
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
@@ -75,6 +115,7 @@ struct TodayView: View {
 
             Button {
                 store.startSession(random: true)
+                pickBackgroundPhoto(force: true)
             } label: {
                 Label("随机一张", systemImage: "shuffle")
                     .frame(maxWidth: .infinity)
@@ -95,6 +136,7 @@ struct TodayView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("今日看过")
                 .font(.headline)
+                .foregroundStyle(Color.practiceInk)
 
             if store.todayRecords.isEmpty {
                 EmptyPanel(text: store.loadingMessage.isEmpty ? "今天还没有记录，先看一张好照片。" : store.loadingMessage)
@@ -114,6 +156,16 @@ struct TodayView: View {
         if count > 0 { return "接着看，别让进度丢了。" }
         return "先看一张好照片。"
     }
+
+    private func pickBackgroundPhotoIfNeeded() {
+        guard backgroundPhotoID == nil else { return }
+        pickBackgroundPhoto(force: true)
+    }
+
+    private func pickBackgroundPhoto(force: Bool = false) {
+        guard force || backgroundPhotoID == nil else { return }
+        backgroundPhotoID = store.photos.randomElement()?.id
+    }
 }
 
 struct StatTile: View {
@@ -127,10 +179,11 @@ struct StatTile: View {
                 .foregroundStyle(Color.practiceMuted)
             Text(value)
                 .font(.title3.weight(.bold))
+                .foregroundStyle(Color.practiceInk)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(.white.opacity(0.82))
+        .background(.white.opacity(0.86))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }

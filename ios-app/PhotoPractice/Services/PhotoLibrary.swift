@@ -48,8 +48,9 @@ final class PhotoLibrary {
             return cached
         }
 
-        guard let url = imageURL(for: photo) else { return nil }
-        guard let image = UIImage(contentsOfFile: url.path) else { return nil }
+        guard let url = imageURL(for: photo), let image = UIImage(contentsOfFile: url.path) else {
+            return nil
+        }
 
         let pixelCount = image.size.width * image.scale * image.size.height * image.scale
         imageCache.setObject(image, forKey: cacheKey, cost: Int(pixelCount * 4))
@@ -81,7 +82,7 @@ final class PhotoLibrary {
         }
         try fileManager.createDirectory(at: stagingURL, withIntermediateDirectories: true)
 
-        _ = try ZipArchiveReader(archiveURL: archiveURL).extractImages(to: stagingURL)
+        _ = try ZipArchiveReader(archiveURL: archiveURL).extractLibraryFiles(to: stagingURL)
         let photos = try scanImportedPhotos(in: stagingURL)
         guard !photos.isEmpty else {
             throw PhotoLibraryError.noImagesInArchive
@@ -126,10 +127,10 @@ final class PhotoLibrary {
     }
 
     private func scanImportedPhotos(in rootURL: URL) throws -> [PhotoItem] {
-        let imageURLs = allImageURLs(under: rootURL)
-        return imageURLs
+        let metadata = try importedMetadataByPath(in: rootURL)
+        return allImageURLs(under: rootURL)
             .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
-            .map { photoItem(for: $0, rootURL: rootURL) }
+            .map { photoItem(for: $0, rootURL: rootURL, metadata: metadata) }
     }
 
     private func allImageURLs(under rootURL: URL) -> [URL] {
@@ -147,8 +148,12 @@ final class PhotoLibrary {
         }
     }
 
-    private func photoItem(for imageURL: URL, rootURL: URL) -> PhotoItem {
+    private func photoItem(for imageURL: URL, rootURL: URL, metadata: [String: PhotoItem]) -> PhotoItem {
         let relativePath = relativePath(for: imageURL, under: rootURL)
+        if let manifestPhoto = metadata[normalizedPath(relativePath)] ?? metadata[metadataLookupPath(for: relativePath)] {
+            return manifestPhoto
+        }
+
         let components = relativePath.split(separator: "/").map(String.init)
         let filename = imageURL.lastPathComponent
         let category = inferredCategory(from: components)
@@ -175,6 +180,75 @@ final class PhotoLibrary {
             cameraInfo: nil,
             originalImageURL: nil
         )
+    }
+
+    private func importedMetadataByPath(in rootURL: URL) throws -> [String: PhotoItem] {
+        var metadata: [String: PhotoItem] = [:]
+        let decoder = JSONDecoder()
+
+        for manifestURL in manifestURLs(under: rootURL) {
+            guard let manifest = try? decoder.decode(PhotoManifest.self, from: Data(contentsOf: manifestURL)) else {
+                continue
+            }
+
+            let manifestFolder = relativePath(for: manifestURL.deletingLastPathComponent(), under: rootURL)
+            for photo in manifest.photos {
+                let localPath = localPath(for: photo.path, manifestFolder: manifestFolder)
+                let enriched = PhotoItem(
+                    filename: photo.filename,
+                    path: localPath,
+                    title: photo.title,
+                    photographer: photo.photographer,
+                    source: photo.source,
+                    website: photo.website,
+                    category: photo.category,
+                    description: photo.description,
+                    tags: photo.tags,
+                    year: photo.year,
+                    award: photo.award,
+                    country: photo.country,
+                    location: photo.location,
+                    cameraInfo: photo.cameraInfo,
+                    originalImageURL: photo.originalImageURL
+                )
+                metadata[normalizedPath(localPath)] = enriched
+                metadata[metadataLookupPath(for: localPath)] = enriched
+            }
+        }
+
+        return metadata
+    }
+
+    private func manifestURLs(under rootURL: URL) -> [URL] {
+        guard let enumerator = fileManager.enumerator(
+            at: rootURL,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        return enumerator.compactMap { item -> URL? in
+            guard let url = item as? URL else { return nil }
+            let name = url.lastPathComponent.lowercased()
+            return (name == "manifest.json" || name == "photo-manifest.json") ? url : nil
+        }
+    }
+
+    private func localPath(for manifestPath: String, manifestFolder: String) -> String {
+        let normalizedManifestPath = normalizedPath(manifestPath)
+        if manifestFolder.isEmpty || normalizedManifestPath.hasPrefix(manifestFolder + "/") {
+            return normalizedManifestPath
+        }
+        return normalizedPath(manifestFolder + "/" + normalizedManifestPath)
+    }
+
+    private func metadataLookupPath(for path: String) -> String {
+        let normalized = normalizedPath(path)
+        if let photosRange = normalized.range(of: "/photos/") {
+            return String(normalized[photosRange.upperBound...])
+        }
+        return URL(fileURLWithPath: normalized).lastPathComponent
     }
 
     private func relativePath(for imageURL: URL, under rootURL: URL) -> String {
@@ -211,8 +285,7 @@ final class PhotoLibrary {
 
     private func existingImageURL(for photo: PhotoItem, under rootURL: URL) -> URL? {
         for candidate in candidateRelativePaths(for: photo) {
-            if let url = try? url(forRelativePath: candidate, under: rootURL),
-               fileManager.fileExists(atPath: url.path) {
+            if let url = try? url(forRelativePath: candidate, under: rootURL), fileManager.fileExists(atPath: url.path) {
                 return url
             }
         }
@@ -318,6 +391,3 @@ final class PhotoLibrary {
         ["jpg", "jpeg", "png", "heic", "heif", "webp"].contains(url.pathExtension.lowercased())
     }
 }
-
-
-

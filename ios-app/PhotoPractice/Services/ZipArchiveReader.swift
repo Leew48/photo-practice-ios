@@ -22,23 +22,26 @@ struct ZipArchiveReader {
         self.archiveURL = archiveURL
     }
 
-    func extractImages(to destinationDirectory: URL) throws -> [URL] {
+    func extractLibraryFiles(to destinationDirectory: URL) throws -> [URL] {
         guard let archive = Archive(url: archiveURL, accessMode: .read) else {
             throw ZipArchiveError.invalidArchive
         }
 
         let fileManager = FileManager.default
-        var extractedURLs: [URL] = []
+        var extractedImageURLs: [URL] = []
         try fileManager.createDirectory(at: destinationDirectory, withIntermediateDirectories: true)
 
-        for entry in archive where entry.type == .file && Self.isImagePath(entry.path) {
+        for entry in archive where entry.type == .file && Self.shouldExtract(entry.path) {
             let outputURL = try safeOutputURL(for: entry.path, in: destinationDirectory)
             try fileManager.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             _ = try archive.extract(entry, to: outputURL)
-            extractedURLs.append(outputURL)
+
+            if Self.isImagePath(entry.path) {
+                extractedImageURLs.append(outputURL)
+            }
         }
 
-        return extractedURLs
+        return extractedImageURLs
     }
 
     private func safeOutputURL(for entryName: String, in destinationDirectory: URL) throws -> URL {
@@ -53,6 +56,15 @@ struct ZipArchiveReader {
         return components.reduce(destinationDirectory) { partialURL, component in
             partialURL.appendingPathComponent(component, isDirectory: false)
         }
+    }
+
+    private static func shouldExtract(_ path: String) -> Bool {
+        isImagePath(path) || isManifestPath(path)
+    }
+
+    private static func isManifestPath(_ path: String) -> Bool {
+        let filename = URL(fileURLWithPath: path).lastPathComponent.lowercased()
+        return filename == "manifest.json" || filename == "photo-manifest.json"
     }
 
     private static func isImagePath(_ path: String) -> Bool {

@@ -7,17 +7,27 @@ struct ViewerView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
+            Group {
                 if let photo = store.currentPhoto {
-                    VStack(spacing: 14) {
+                    VStack(spacing: 12) {
                         PhotoStage(photo: photo)
-                        metadata(for: photo)
-                        observationPanel
+                            .padding(.horizontal)
+                            .padding(.top, 8)
+
+                        ScrollView {
+                            VStack(spacing: 14) {
+                                metadata(for: photo)
+                                observationPanel
+                            }
+                            .padding(.horizontal)
+                            .padding(.bottom, 96)
+                        }
                     }
-                    .padding()
                 } else {
-                    EmptyPanel(text: store.loadingMessage.isEmpty ? "离线图库里还没有照片。" : store.loadingMessage)
-                        .padding()
+                    ScrollView {
+                        EmptyPanel(text: store.loadingMessage.isEmpty ? "离线图库里还没有照片。" : store.loadingMessage)
+                            .padding()
+                    }
                 }
             }
             .background(Color.practicePaper.ignoresSafeArea())
@@ -38,6 +48,8 @@ struct ViewerView: View {
 
             Text(photo.title ?? photo.filename)
                 .font(.title3.weight(.bold))
+                .foregroundStyle(Color.practiceInk)
+                .fixedSize(horizontal: false, vertical: true)
 
             InfoGrid(items: [
                 ("摄影人", photo.photographer ?? "未知"),
@@ -50,8 +62,10 @@ struct ViewerView: View {
                 Text(camera)
                     .font(.footnote)
                     .foregroundStyle(Color.practiceMuted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .foregroundStyle(Color.practiceInk)
         .panelStyle()
     }
 
@@ -59,10 +73,12 @@ struct ViewerView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("一句观察")
                 .font(.headline)
+                .foregroundStyle(Color.practiceInk)
 
             TextEditor(text: $store.noteText)
                 .frame(minHeight: 84)
                 .padding(8)
+                .foregroundStyle(Color.practiceInk)
                 .background(Color.black.opacity(0.04))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
@@ -145,8 +161,7 @@ struct PhotoStage: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(minHeight: 420)
+        .frame(height: 340)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
-
