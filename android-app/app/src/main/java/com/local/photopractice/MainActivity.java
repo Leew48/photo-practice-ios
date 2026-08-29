@@ -23,7 +23,9 @@ import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -80,10 +82,13 @@ public class MainActivity extends Activity {
     private int selectedTab = 0;
     private int currentIndex = 0;
     private String loadingMessage = "请先在设置中导入图片 ZIP。";
+    private String importStatus = "";
+    private float textScale = 0.86f;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        textScale = prefs.getFloat("textScale", 0.86f);
         loadProgress();
         loadBundledMetadata();
         loadImportedLibrary();
@@ -103,10 +108,10 @@ public class MainActivity extends Activity {
         root.addView(content, new LinearLayout.LayoutParams(-1, 0, 1));
         bottomNav = row();
         bottomNav.setGravity(Gravity.CENTER);
-        bottomNav.setPadding(dp(10), dp(8), dp(10), dp(10));
-        bottomNav.setBackground(round(Color.argb(235, 58, 58, 54), dp(30)));
-        LinearLayout.LayoutParams navParams = new LinearLayout.LayoutParams(-1, dp(78));
-        navParams.setMargins(dp(16), dp(4), dp(16), dp(12));
+        bottomNav.setPadding(dp(6), dp(6), dp(6), dp(6));
+        bottomNav.setBackgroundColor(Color.argb(248, 255, 255, 255));
+        LinearLayout.LayoutParams navParams = new LinearLayout.LayoutParams(-1, dp(72));
+        navParams.setMargins(0, 0, 0, 0);
         root.addView(bottomNav, navParams);
         setContentView(root);
         rebuildNav();
@@ -124,11 +129,11 @@ public class MainActivity extends Activity {
     private void addNavButton(String title, final int tab) {
         Button button = new Button(this);
         button.setText(title);
-        button.setTextSize(13);
+        button.setTextSize(scaledSp(12));
         button.setTypeface(Typeface.DEFAULT_BOLD);
         button.setAllCaps(false);
-        button.setTextColor(tab == selectedTab ? FOREST : Color.WHITE);
-        button.setBackground(round(tab == selectedTab ? Color.argb(210, 255, 255, 255) : Color.TRANSPARENT, dp(28)));
+        button.setTextColor(tab == selectedTab ? FOREST : MUTED);
+        button.setBackground(round(tab == selectedTab ? Color.rgb(224, 240, 234) : Color.TRANSPARENT, dp(18)));
         button.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { selectTab(tab); } });
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, -1, 1);
         params.setMargins(dp(3), 0, dp(3), 0);
@@ -248,7 +253,7 @@ public class MainActivity extends Activity {
         panel.addView(sectionTitle("一句观察"));
         final EditText edit = new EditText(this);
         edit.setHint("写下这一张照片最打动你的地方");
-        edit.setTextSize(15);
+        edit.setTextSize(scaledSp(15));
         edit.setTextColor(INK);
         edit.setHintTextColor(Color.argb(150, 98, 121, 124));
         edit.setMinLines(3);
@@ -322,6 +327,26 @@ public class MainActivity extends Activity {
         scroll.addView(body);
         body.addView(title("设置", 32));
         body.addView(text("安卓版本可以直接安装 APK 测试，不需要 Apple 签名，也不用开发者模式。", 15, MUTED, false));
+        body.addView(text("界面文字大小", 18, INK, true), margins(0, dp(18), 0, 0));
+        body.addView(text("如果当前手机上文字偏大，可以在这里调小。", 14, MUTED, false), margins(0, dp(4), 0, 0));
+        SeekBar fontSeek = new SeekBar(this);
+        fontSeek.setMax(4);
+        fontSeek.setProgress(textScaleToStep());
+        fontSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (!fromUser) return;
+                textScale = stepToTextScale(progress);
+                prefs.edit().putFloat("textScale", textScale).apply();
+                showSettings();
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) { }
+            @Override public void onStopTrackingTouch(SeekBar seekBar) { }
+        });
+        body.addView(fontSeek, margins(0, dp(6), 0, dp(4)));
+        body.addView(statusPanel("当前字号：" + textScaleLabel()), margins(0, dp(4), 0, 0));
+        if (importStatus.length() > 0) {
+            body.addView(statusPanel(importStatus), margins(0, dp(14), 0, 0));
+        }
         Button importButton = primaryButton("导入图片 ZIP");
         importButton.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { pickZip(); } });
         body.addView(importButton, margins(0, dp(16), 0, 0));
@@ -335,17 +360,34 @@ public class MainActivity extends Activity {
     private void pickZip() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("application/zip");
-        startActivityForResult(intent, REQ_IMPORT_ZIP);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[] {
+            "application/zip",
+            "application/x-zip-compressed",
+            "application/octet-stream"
+        });
+        startActivityForResult(Intent.createChooser(intent, "选择 PhotoLibrary.zip"), REQ_IMPORT_ZIP);
     }
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQ_IMPORT_ZIP && resultCode == RESULT_OK && data != null && data.getData() != null) importZip(data.getData());
+        if (requestCode == REQ_IMPORT_ZIP && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            Uri uri = data.getData();
+            try {
+                getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } catch (Exception ignored) { }
+            Toast.makeText(this, "已选择文件，开始导入", Toast.LENGTH_SHORT).show();
+            importZip(uri);
+        } else if (requestCode == REQ_IMPORT_ZIP) {
+            importStatus = "没有选择文件。";
+            showSettings();
+        }
     }
 
     private void importZip(final Uri uri) {
         loadingMessage = "正在导入图片包，请保持 App 打开...";
+        importStatus = "已选择文件，正在准备导入...";
         showSettings();
         executor.execute(new Runnable() {
             @Override public void run() {
@@ -354,11 +396,13 @@ public class MainActivity extends Activity {
                     runOnUiThread(new Runnable() { @Override public void run() {
                         Toast.makeText(MainActivity.this, "导入完成：" + count + " 张", Toast.LENGTH_LONG).show();
                         loadingMessage = "";
+                        importStatus = "导入完成：" + count + " 张照片。";
                         showToday();
                     }});
                 } catch (final Exception e) {
                     runOnUiThread(new Runnable() { @Override public void run() {
                         loadingMessage = "导入失败：" + e.getMessage();
+                        importStatus = loadingMessage;
                         Toast.makeText(MainActivity.this, loadingMessage, Toast.LENGTH_LONG).show();
                         showSettings();
                     }});
@@ -377,13 +421,18 @@ public class MainActivity extends Activity {
         ZipInputStream zip = new ZipInputStream(new BufferedInputStream(input));
         ZipEntry entry;
         byte[] buffer = new byte[1024 * 64];
+        int entryCount = 0;
+        int imageCount = 0;
+        updateImportStatus("正在解压 ZIP...");
         while ((entry = zip.getNextEntry()) != null) {
+            entryCount++;
             String name = normalizePath(entry.getName());
             if (name.length() == 0 || name.contains("../")) continue;
             File out = new File(staging, name);
             if (entry.isDirectory()) {
                 out.mkdirs();
             } else if (isImage(name) || name.endsWith("manifest.json") || name.endsWith("photo-manifest.json")) {
+                if (isImage(name)) imageCount++;
                 File parent = out.getParentFile();
                 if (parent != null) parent.mkdirs();
                 BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(out));
@@ -391,21 +440,25 @@ public class MainActivity extends Activity {
                 while ((read = zip.read(buffer)) != -1) bos.write(buffer, 0, read);
                 bos.close();
             }
+            if (entryCount % 200 == 0) {
+                updateImportStatus("正在解压：" + entryCount + " 个文件，已找到图片 " + imageCount + " 张");
+            }
             zip.closeEntry();
         }
         zip.close();
+        updateImportStatus("解压完成，正在建立图库索引...");
         ArrayList<Photo> scanned = scanPhotos(staging);
         if (scanned.isEmpty()) throw new IllegalStateException("压缩包里没有找到图片");
         saveLibraryJson(scanned, staging);
         deleteRecursively(root);
         if (!staging.renameTo(root)) throw new IllegalStateException("保存图库失败");
+        updateImportStatus("正在保存图库：" + scanned.size() + " 张照片");
         photos.clear();
         photos.addAll(scanned);
         currentIndex = 0;
         saveProgress();
         return photos.size();
     }
-
     private ArrayList<Photo> scanPhotos(File root) {
         ArrayList<File> files = new ArrayList<>();
         collectImages(root, files);
@@ -585,6 +638,49 @@ public class MainActivity extends Activity {
         dialog.show();
     }
 
+    private View statusPanel(String message) {
+        LinearLayout panel = row();
+        panel.setGravity(Gravity.CENTER_VERTICAL);
+        panel.setPadding(dp(12), dp(10), dp(12), dp(10));
+        panel.setBackground(round(Color.rgb(238, 248, 244), dp(8), Color.argb(70, 82, 173, 179), 1));
+        if (message.startsWith("正在") || message.startsWith("已选择")) {
+            ProgressBar progress = new ProgressBar(this);
+            panel.addView(progress, new LinearLayout.LayoutParams(dp(28), dp(28)));
+        }
+        TextView status = text(message, 14, FOREST, true);
+        status.setPadding(dp(10), 0, 0, 0);
+        panel.addView(status, new LinearLayout.LayoutParams(0, -2, 1));
+        return panel;
+    }
+
+    private void updateImportStatus(final String status) {
+        importStatus = status;
+        runOnUiThread(new Runnable() { @Override public void run() {
+            if (selectedTab == 4) showSettings();
+        }});
+    }
+
+    private int scaledSp(int sp) {
+        return Math.max(10, Math.round(sp * textScale));
+    }
+
+    private int textScaleToStep() {
+        return Math.max(0, Math.min(4, Math.round((textScale - 0.74f) / 0.08f)));
+    }
+
+    private float stepToTextScale(int step) {
+        return 0.74f + (Math.max(0, Math.min(4, step)) * 0.08f);
+    }
+
+    private String textScaleLabel() {
+        int step = textScaleToStep();
+        if (step == 0) return "很小";
+        if (step == 1) return "小";
+        if (step == 2) return "适中";
+        if (step == 3) return "较大";
+        return "大";
+    }
+
     private View stat(String label, String value) {
         LinearLayout tile = column();
         tile.setPadding(dp(10), dp(9), dp(10), dp(8));
@@ -639,7 +735,7 @@ public class MainActivity extends Activity {
     private TextView text(String value, int sp, int color, boolean bold) {
         TextView t = new TextView(this);
         t.setText(value);
-        t.setTextSize(sp);
+        t.setTextSize(scaledSp(sp));
         t.setTextColor(color);
         if (bold) t.setTypeface(Typeface.DEFAULT_BOLD);
         t.setIncludeFontPadding(true);
@@ -651,7 +747,7 @@ public class MainActivity extends Activity {
         b.setText(text);
         b.setAllCaps(false);
         b.setTextColor(Color.WHITE);
-        b.setTextSize(15);
+        b.setTextSize(scaledSp(15));
         b.setTypeface(Typeface.DEFAULT_BOLD);
         b.setBackground(round(AQUA, dp(8)));
         return b;
@@ -662,7 +758,7 @@ public class MainActivity extends Activity {
         b.setText(text);
         b.setAllCaps(false);
         b.setTextColor(FOREST);
-        b.setTextSize(15);
+        b.setTextSize(scaledSp(15));
         b.setTypeface(Typeface.DEFAULT_BOLD);
         b.setBackground(round(Color.argb(220, 255, 255, 255), dp(8), Color.argb(70, 82, 173, 179), 1));
         return b;
@@ -677,7 +773,7 @@ public class MainActivity extends Activity {
 
     private LinearLayout pageBody() {
         LinearLayout body = column();
-        body.setPadding(dp(16), dp(18), dp(16), dp(104));
+        body.setPadding(dp(16), dp(18), dp(16), dp(24));
         return body;
     }
 
