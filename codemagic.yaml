@@ -1,4 +1,29 @@
 workflows:
+
+  android-debug-apk:
+    name: PhotoPractice Android Debug APK
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      java: 17
+      vars:
+        ANDROID_DIR: "android-app"
+    scripts:
+      - name: Show Android source size
+        script: |
+          du -sh "$ANDROID_DIR"
+      - name: Build debug APK
+        script: |
+          cd "$ANDROID_DIR"
+          if ! command -v gradle >/dev/null 2>&1; then
+            curl -L https://services.gradle.org/distributions/gradle-8.10.2-bin.zip -o /tmp/gradle.zip
+            unzip -q /tmp/gradle.zip -d /tmp
+            export PATH="/tmp/gradle-8.10.2/bin:$PATH"
+          fi
+          gradle :app:assembleDebug --no-daemon
+    artifacts:
+      - android-app/app/build/outputs/apk/debug/*.apk
+
   ios-reader-dev:
     name: PhotoPractice Reader iOS Compile Check
     max_build_duration: 60
